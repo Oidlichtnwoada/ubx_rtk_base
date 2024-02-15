@@ -1,7 +1,9 @@
+import dataclasses
 import io
 import queue
 import re
 import threading
+import time
 import typing
 
 import pynmeagps
@@ -11,6 +13,13 @@ import serial.tools.list_ports
 import serial.tools.list_ports_common
 
 from ubx_rtk_base.utils.string_utils import get_default_string_value
+
+
+@dataclasses.dataclass(frozen=True, order=True, kw_only=True)
+class Position:
+    latitude_degrees: float
+    longitude_degrees: float
+    altitude_meters: float
 
 
 def is_ublox_gnss_receiver(
@@ -42,6 +51,14 @@ def get_default_ublox_gnss_receiver_timeout() -> float:
 
 def get_default_ublox_gnss_receiver_port_type() -> str:
     return "USB"
+
+
+def get_default_accuracy_limit_millimeters() -> int:
+    return 200
+
+
+def get_default_survey_in_min_duration_seconds() -> int:
+    return 60
 
 
 def get_ublox_gnss_receiver_serial() -> serial.Serial:
@@ -128,10 +145,20 @@ def get_factory_reset_message_for_ublox_gnss_receiver() -> pyubx2.UBXMessage:
     )
 
 
-def get_rtcm3_base_station_outputs_for_ublox_gnss_receiver() -> pyubx2.UBXMessage:
+def get_configuration_ublox_message(
+    cfg_data: tuple[tuple[str, int], ...]
+) -> pyubx2.UBXMessage:
     layers = 7
     transaction = 0
-    cfg_data = []
+    ubx_msg = pyubx2.UBXMessage.config_set(layers, transaction, list(cfg_data))
+    if isinstance(ubx_msg, pyubx2.UBXMessage):
+        return ubx_msg
+    else:
+        raise RuntimeError
+
+
+def get_rtcm3_base_station_outputs_for_ublox_gnss_receiver() -> pyubx2.UBXMessage:
+    cfg_data: tuple[tuple[str, int], ...] = ()
     for rtcm_type in (
         "1005",
         "1077",
@@ -142,13 +169,54 @@ def get_rtcm3_base_station_outputs_for_ublox_gnss_receiver() -> pyubx2.UBXMessag
         "4072_0",
         "4072_1",
     ):
-        cfg = f"CFG_MSGOUT_RTCM_3X_TYPE{rtcm_type}_{get_default_ublox_gnss_receiver_port_type()}"
-        cfg_data.append([cfg, 1])
-    ubx = pyubx2.UBXMessage.config_set(layers, transaction, cfg_data)
-    if isinstance(ubx, pyubx2.UBXMessage):
-        return ubx
-    else:
-        raise RuntimeError
+        cfg_data += (
+            (
+                f"CFG_MSGOUT_RTCM_3X_TYPE{rtcm_type}_{get_default_ublox_gnss_receiver_port_type()}",
+                1,
+            ),
+        )
+    return get_configuration_ublox_message(cfg_data)
+
+
+def get_survey_in_mode_for_ublox_gnss_receiver(
+    accuracy_limit_millimeters: int = get_default_accuracy_limit_millimeters(),
+    survey_in_min_duration_seconds: int = get_default_survey_in_min_duration_seconds(),
+) -> pyubx2.UBXMessage:
+    cfg_data = (
+        ("CFG_TMODE_MODE", 1),
+        (
+            "CFG_TMODE_SVIN_ACC_LIMIT",
+            accuracy_limit_millimeters * 10,
+        ),
+        ("CFG_TMODE_SVIN_MIN_DUR", survey_in_min_duration_seconds),
+        (f"CFG_MSGOUT_UBX_NAV_SVIN_{get_default_ublox_gnss_receiver_port_type()}", 1),
+    )
+    return get_configuration_ublox_message(cfg_data)
+
+
+def get_fixed_mode_for_ublox_gnss_receiver(
+    position: Position,
+    accuracy_limit_millimeters: int = get_default_accuracy_limit_millimeters(),
+) -> pyubx2.UBXMessage:
+    altitude_centimeters = round(position.altitude_meters * 100)
+    latitude_first_part, latitude_second_part = pyubx2.val2sphp(
+        position.latitude_degrees
+    )
+    longitude_first_part, longitude_second_part = pyubx2.val2sphp(
+        position.longitude_degrees
+    )
+    cfg_data = (
+        ("CFG_TMODE_MODE", 2),
+        ("CFG_TMODE_POS_TYPE", 1),
+        ("CFG_TMODE_FIXED_POS_ACC", accuracy_limit_millimeters * 10),
+        ("CFG_TMODE_HEIGHT_HP", 0),
+        ("CFG_TMODE_HEIGHT", altitude_centimeters),
+        ("CFG_TMODE_LAT", latitude_first_part),
+        ("CFG_TMODE_LAT_HP", latitude_second_part),
+        ("CFG_TMODE_LON", longitude_first_part),
+        ("CFG_TMODE_LON_HP", longitude_second_part),
+    )
+    return get_configuration_ublox_message(cfg_data)
 
 
 class UbloxGnssReceiver:
@@ -178,6 +246,12 @@ class UbloxGnssReceiver:
     def configure_rtcm3(self) -> None:
         self.send_message(get_rtcm3_base_station_outputs_for_ublox_gnss_receiver())
 
+    def configure_survey_in_mode(self) -> None:
+        self.send_message(get_survey_in_mode_for_ublox_gnss_receiver())
+
+    def configure_fixed_mode(self, position: Position) -> None:
+        self.send_message(get_fixed_mode_for_ublox_gnss_receiver(position))
+
     def read_messages(self) -> None:
         read_messages_from_ublox_gnss_receiver(
             self.serial, self.running_queue, self.ack_queue, self.callback
@@ -185,3 +259,7 @@ class UbloxGnssReceiver:
 
     def send_message(self, message: pyubx2.UBXMessage) -> None:
         send_message_to_ublox_gnss_receiver(self.serial, message, self.ack_queue)
+
+    def wait_until_terminated(self) -> None:
+        while not self.running_queue.empty():
+            time.sleep(0.1)
