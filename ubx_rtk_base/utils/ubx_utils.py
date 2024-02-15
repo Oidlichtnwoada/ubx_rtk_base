@@ -10,20 +10,17 @@ from serial import Serial
 from serial.tools.list_ports import comports
 from serial.tools.list_ports_common import ListPortInfo
 
+from ubx_rtk_base.utils.string_utils import get_default_string_value
+
 
 def is_ublox_gnss_receiver(port_info: ListPortInfo) -> bool:
-    ublox_gnss_receiver_manufacturer = "u-blox AG - www.u-blox.com"
-    ublox_gnss_receiver_product = "u-blox GNSS receiver"
-    ublox_gnss_receiver_description = ublox_gnss_receiver_product
-    manufacturer: str | None = port_info.manufacturer
-    product: str | None = port_info.product
-    description: str | None = port_info.description
-    if manufacturer is None or product is None or description is None:
-        raise RuntimeError
+    manufacturer = get_default_string_value(port_info.manufacturer)
+    product = get_default_string_value(port_info.product)
+    description = get_default_string_value(port_info.description)
     return (
-        manufacturer == ublox_gnss_receiver_manufacturer
-        and product == ublox_gnss_receiver_product
-        and description == ublox_gnss_receiver_description
+        manufacturer == "u-blox AG - www.u-blox.com"
+        and product == "u-blox GNSS receiver"
+        and description == "u-blox GNSS receiver"
     )
 
 
