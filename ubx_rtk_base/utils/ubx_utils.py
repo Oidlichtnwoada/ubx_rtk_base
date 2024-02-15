@@ -64,7 +64,7 @@ def is_ack_message_correct(
     if match is None:
         raise RuntimeError
     try:
-        ack_message_identity = str(match.group(1))
+        ack_message_identity = match.group(1)
         return sent_message_identity == ack_message_identity
     except IndexError:
         raise RuntimeError
