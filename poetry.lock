@@ -190,6 +190,50 @@ dev = ["pre-commit", "tox"]
 testing = ["pytest", "pytest-benchmark"]
 
 [[package]]
+name = "pynmeagps"
+version = "1.0.33"
+description = "NMEA protocol parser and generator"
+optional = false
+python-versions = ">=3.8"
+files = [
+    {file = "pynmeagps-1.0.33-py3-none-any.whl", hash = "sha256:e38e34eca9e4f10130917756a23a123165ed87d3d9d6ae65e90607bfae85bf53"},
+    {file = "pynmeagps-1.0.33.tar.gz", hash = "sha256:cc7a8f604a6cb89ef5d8215fb419bf71de08b9c879005f98824dfe2e27fba9be"},
+]
+
+[package.extras]
+deploy = ["build", "pip", "setuptools (>=66.0)", "wheel"]
+test = ["Sphinx", "bandit", "black", "isort", "pylint", "pytest", "pytest-cov", "sphinx-rtd-theme"]
+
+[[package]]
+name = "pyrtcm"
+version = "1.0.15"
+description = "RTCM3 protocol parser"
+optional = false
+python-versions = ">=3.8"
+files = [
+    {file = "pyrtcm-1.0.15-py3-none-any.whl", hash = "sha256:3e17339aff61333abfc8b58575aaf550bfd7a8ca76e16c2ba0b4313ed60b6d64"},
+    {file = "pyrtcm-1.0.15.tar.gz", hash = "sha256:fb2bc569b3415a44d399777ea1b4fea05152c2aac70ce6c967cc25582508dfee"},
+]
+
+[package.extras]
+deploy = ["build", "pip", "setuptools (>=66.0)", "wheel"]
+test = ["Sphinx", "bandit", "black", "pylint", "pytest", "pytest-cov", "sphinx-rtd-theme"]
+
+[[package]]
+name = "pyserial"
+version = "3.5"
+description = "Python Serial Port Extension"
+optional = false
+python-versions = "*"
+files = [
+    {file = "pyserial-3.5-py2.py3-none-any.whl", hash = "sha256:c4451db6ba391ca6ca299fb3ec7bae67a5c55dde170964c7a14ceefec02f2cf0"},
+    {file = "pyserial-3.5.tar.gz", hash = "sha256:3c77e014170dfffbd816e6ffc205e9842efb10be9f58ec16d3e8675b4925cddb"},
+]
+
+[package.extras]
+cp2110 = ["hidapi"]
+
+[[package]]
 name = "pytest"
 version = "8.0.0"
 description = "pytest: simple powerful testing with Python"
@@ -210,6 +254,25 @@ pluggy = ">=1.3.0,<2.0"
 testing = ["argcomplete", "attrs (>=19.2.0)", "hypothesis (>=3.56)", "mock", "nose", "pygments (>=2.7.2)", "requests", "setuptools", "xmlschema"]
 
 [[package]]
+name = "pyubx2"
+version = "1.2.38"
+description = "UBX protocol parser and generator"
+optional = false
+python-versions = ">=3.8"
+files = [
+    {file = "pyubx2-1.2.38-py3-none-any.whl", hash = "sha256:d06ac328485833babd75f6d95301429dafd4d39e6f055f436c72476b902c7fc9"},
+    {file = "pyubx2-1.2.38.tar.gz", hash = "sha256:2e5d191d9858780ad7ae7ccab93e41371307dc513a27b3b119c5ced859e53677"},
+]
+
+[package.dependencies]
+pynmeagps = ">=1.0.33"
+pyrtcm = ">=1.0.15"
+
+[package.extras]
+deploy = ["build", "pip", "setuptools (>=66.0)", "wheel"]
+test = ["Sphinx", "bandit", "black", "isort", "pylint", "pytest", "pytest-cov", "sphinx-rtd-theme"]
+
+[[package]]
 name = "typing-extensions"
 version = "4.9.0"
 description = "Backported and Experimental Type Hints for Python 3.8+"
@@ -223,4 +286,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.12"
-content-hash = "e82b4cb4884f31497bc689aeae25724ffc3fe8ad6c5b305f9ef848a98305efaf"
+content-hash = "3c2fc4ae990b37dea15ec3112ce1a075f764877cabc4f8ec51cf1a815bdf994a"
