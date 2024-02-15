@@ -12,6 +12,7 @@ import serial
 import serial.tools.list_ports
 import serial.tools.list_ports_common
 
+from ubx_rtk_base.utils.math_utils import value_to_precision_integers
 from ubx_rtk_base.utils.string_utils import get_default_string_value
 
 
@@ -210,13 +211,13 @@ def get_fixed_mode_for_ublox_gnss_receiver(
     position: Position,
     accuracy_limit_millimeters: int = get_default_accuracy_limit_millimeters(),
 ) -> pyubx2.UBXMessage:
-    altitude_first_part, altitude_second_part = pyubx2.val2sphp(
-        position.altitude_meters, 1e-2
+    altitude_first_part, altitude_second_part = value_to_precision_integers(
+        position.altitude_meters, scale_factor=10**2, decimal_places=1
     )
-    latitude_first_part, latitude_second_part = pyubx2.val2sphp(
+    latitude_first_part, latitude_second_part = value_to_precision_integers(
         position.latitude_degrees
     )
-    longitude_first_part, longitude_second_part = pyubx2.val2sphp(
+    longitude_first_part, longitude_second_part = value_to_precision_integers(
         position.longitude_degrees
     )
     cfg_data = (
