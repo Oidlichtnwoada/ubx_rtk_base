@@ -62,11 +62,15 @@ def get_default_ublox_gnss_receiver_port_type() -> str:
 
 
 def get_default_accuracy_limit_millimeters() -> int:
-    return 200
+    return 5000
 
 
 def get_default_survey_in_min_duration_seconds() -> int:
     return 60
+
+
+def get_internal_accuracy_limit_value(accuracy_limit_millimeters: int) -> int:
+    return accuracy_limit_millimeters * 10
 
 
 def get_ublox_gnss_receiver_serial() -> serial.Serial:
@@ -194,7 +198,7 @@ def get_survey_in_mode_for_ublox_gnss_receiver(
         ("CFG_TMODE_MODE", 1),
         (
             "CFG_TMODE_SVIN_ACC_LIMIT",
-            accuracy_limit_millimeters * 10,
+            get_internal_accuracy_limit_value(accuracy_limit_millimeters),
         ),
         ("CFG_TMODE_SVIN_MIN_DUR", survey_in_min_duration_seconds),
         (f"CFG_MSGOUT_UBX_NAV_SVIN_{get_default_ublox_gnss_receiver_port_type()}", 1),
@@ -218,7 +222,10 @@ def get_fixed_mode_for_ublox_gnss_receiver(
     cfg_data = (
         ("CFG_TMODE_MODE", 2),
         ("CFG_TMODE_POS_TYPE", 1),
-        ("CFG_TMODE_FIXED_POS_ACC", accuracy_limit_millimeters * 10),
+        (
+            "CFG_TMODE_FIXED_POS_ACC",
+            get_internal_accuracy_limit_value(accuracy_limit_millimeters),
+        ),
         ("CFG_TMODE_HEIGHT", altitude_first_part),
         ("CFG_TMODE_HEIGHT_HP", altitude_second_part),
         ("CFG_TMODE_LAT", latitude_first_part),
