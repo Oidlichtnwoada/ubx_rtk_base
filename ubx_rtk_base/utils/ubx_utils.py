@@ -1,19 +1,21 @@
+import io
 import queue
 import re
-from io import BufferedReader
-from threading import Thread
-from typing import Callable
+import threading
+import typing
 
-from pynmeagps import NMEAMessage
-from pyubx2 import UBXMessage, UBXReader, SET
-from serial import Serial
-from serial.tools.list_ports import comports
-from serial.tools.list_ports_common import ListPortInfo
+import pynmeagps
+import pyubx2
+import serial
+import serial.tools.list_ports
+import serial.tools.list_ports_common
 
 from ubx_rtk_base.utils.string_utils import get_default_string_value
 
 
-def is_ublox_gnss_receiver(port_info: ListPortInfo) -> bool:
+def is_ublox_gnss_receiver(
+    port_info: serial.tools.list_ports_common.ListPortInfo,
+) -> bool:
     manufacturer = get_default_string_value(port_info.manufacturer)
     product = get_default_string_value(port_info.product)
     description = get_default_string_value(port_info.description)
@@ -25,7 +27,7 @@ def is_ublox_gnss_receiver(port_info: ListPortInfo) -> bool:
 
 
 def get_ports_of_ublox_gnss_receiver() -> tuple[str, ...]:
-    port_list = comports(include_links=True)
+    port_list = serial.tools.list_ports.comports(include_links=True)
     gnss_receiver_port_list = filter(is_ublox_gnss_receiver, port_list)
     return tuple([x.device for x in gnss_receiver_port_list])
 
@@ -42,18 +44,20 @@ def get_default_ublox_gnss_receiver_port_type() -> str:
     return "USB"
 
 
-def get_ublox_gnss_receiver_serial() -> Serial:
+def get_ublox_gnss_receiver_serial() -> serial.Serial:
     ublox_gnss_receiver_ports = get_ports_of_ublox_gnss_receiver()
     if len(ublox_gnss_receiver_ports) == 0:
         raise RuntimeError
-    return Serial(
+    return serial.Serial(
         port=ublox_gnss_receiver_ports[0],
         baudrate=get_default_ublox_gnss_receiver_baudrate(),
         timeout=get_default_ublox_gnss_receiver_timeout(),
     )
 
 
-def is_ack_message_correct(ack_message: UBXMessage, sent_message: UBXMessage) -> bool:
+def is_ack_message_correct(
+    ack_message: pyubx2.UBXMessage, sent_message: pyubx2.UBXMessage
+) -> bool:
     sent_message_identity: str = sent_message.identity
     ack_message_string = str(ack_message)
     match = re.search("msgID=([A-Z]{3}-[A-Z]{3})", ack_message_string)
@@ -67,38 +71,42 @@ def is_ack_message_correct(ack_message: UBXMessage, sent_message: UBXMessage) ->
 
 
 def send_message_to_ublox_gnss_receiver(
-    serial: Serial, message: UBXMessage, ack_queue: queue.Queue[UBXMessage]
+    serial_port: serial.Serial,
+    message: pyubx2.UBXMessage,
+    ack_queue: queue.Queue[pyubx2.UBXMessage],
 ) -> None:
-    serial.write(message.serialize())
+    serial_port.write(message.serialize())
     ack_message = ack_queue.get()
     if not is_ack_message_correct(ack_message, message):
         raise RuntimeError
 
 
 def get_default_message_callback_for_ublox_gnss_receiver(
-    message: UBXMessage | NMEAMessage,
+    message: pyubx2.UBXMessage | pynmeagps.NMEAMessage,
 ) -> None:
     print(message)
 
 
-def is_message_ublox_acknowledge(message: UBXMessage | NMEAMessage) -> bool:
-    if isinstance(message, UBXMessage):
+def is_message_ublox_acknowledge(
+    message: pyubx2.UBXMessage | pynmeagps.NMEAMessage,
+) -> bool:
+    if isinstance(message, pyubx2.UBXMessage):
         return message.identity in ("ACK-ACK", "ACK-NAK")
     else:
         return False
 
 
 def read_messages_from_ublox_gnss_receiver(
-    serial: Serial,
+    serial_port: serial.Serial,
     running_queue: queue.Queue[bool],
-    ack_queue: queue.Queue[UBXMessage],
-    callback: Callable[
-        [UBXMessage | NMEAMessage], None
+    ack_queue: queue.Queue[pyubx2.UBXMessage],
+    callback: typing.Callable[
+        [pyubx2.UBXMessage | pynmeagps.NMEAMessage], None
     ] = get_default_message_callback_for_ublox_gnss_receiver,
 ) -> None:
-    ublox_reader = UBXReader(BufferedReader(serial))
+    ublox_reader = pyubx2.UBXReader(io.BufferedReader(serial_port))
     while not running_queue.empty():
-        if serial.in_waiting:
+        if serial_port.in_waiting:
             _, parsed_data = ublox_reader.read()
             if parsed_data:
                 if is_message_ublox_acknowledge(parsed_data):
@@ -107,11 +115,11 @@ def read_messages_from_ublox_gnss_receiver(
                     callback(parsed_data)
 
 
-def get_factory_reset_message_for_ublox_gnss_receiver() -> UBXMessage:
-    return UBXMessage(
+def get_factory_reset_message_for_ublox_gnss_receiver() -> pyubx2.UBXMessage:
+    return pyubx2.UBXMessage(
         "CFG",
         "CFG-CFG",
-        SET,
+        pyubx2.SET,
         clearMask=b"\x1f\x1f\x00\x00",
         loadMask=b"\x1f\x1f\x00\x00",
         devBBR=1,
@@ -120,7 +128,7 @@ def get_factory_reset_message_for_ublox_gnss_receiver() -> UBXMessage:
     )
 
 
-def get_rtcm3_base_station_outputs_for_ublox_gnss_receiver() -> UBXMessage:
+def get_rtcm3_base_station_outputs_for_ublox_gnss_receiver() -> pyubx2.UBXMessage:
     layers = 7
     transaction = 0
     cfg_data = []
@@ -136,8 +144,8 @@ def get_rtcm3_base_station_outputs_for_ublox_gnss_receiver() -> UBXMessage:
     ):
         cfg = f"CFG_MSGOUT_RTCM_3X_TYPE{rtcm_type}_{get_default_ublox_gnss_receiver_port_type()}"
         cfg_data.append([cfg, 1])
-    ubx = UBXMessage.config_set(layers, transaction, cfg_data)
-    if isinstance(ubx, UBXMessage):
+    ubx = pyubx2.UBXMessage.config_set(layers, transaction, cfg_data)
+    if isinstance(ubx, pyubx2.UBXMessage):
         return ubx
     else:
         raise RuntimeError
@@ -146,15 +154,15 @@ def get_rtcm3_base_station_outputs_for_ublox_gnss_receiver() -> UBXMessage:
 class UbloxGnssReceiver:
     def __init__(
         self,
-        callback: Callable[
-            [UBXMessage | NMEAMessage], None
+        callback: typing.Callable[
+            [pyubx2.UBXMessage | pynmeagps.NMEAMessage], None
         ] = get_default_message_callback_for_ublox_gnss_receiver,
     ) -> None:
         self.serial = get_ublox_gnss_receiver_serial()
         self.callback = callback
-        self.ack_queue: queue.Queue[UBXMessage] = queue.Queue()
+        self.ack_queue: queue.Queue[pyubx2.UBXMessage] = queue.Queue()
         self.running_queue: queue.Queue[bool] = queue.Queue()
-        self.read_messages_thread = Thread(target=self.read_messages)
+        self.read_messages_thread = threading.Thread(target=self.read_messages)
 
     def start(self) -> None:
         self.running_queue.put(True)
@@ -175,5 +183,5 @@ class UbloxGnssReceiver:
             self.serial, self.running_queue, self.ack_queue, self.callback
         )
 
-    def send_message(self, message: UBXMessage) -> None:
+    def send_message(self, message: pyubx2.UBXMessage) -> None:
         send_message_to_ublox_gnss_receiver(self.serial, message, self.ack_queue)
