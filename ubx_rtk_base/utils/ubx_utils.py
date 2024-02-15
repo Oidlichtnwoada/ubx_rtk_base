@@ -60,7 +60,7 @@ def is_ack_message_correct(
 ) -> bool:
     sent_message_identity: str = sent_message.identity
     ack_message_string = str(ack_message)
-    match = re.search("msgID=([A-Z]{3}-[A-Z]{3})", ack_message_string)
+    match = re.search("msgID=([A-Z]+-[A-Z]+)", ack_message_string)
     if match is None:
         raise RuntimeError
     try:
