@@ -41,6 +41,14 @@ def get_ports_of_ublox_gnss_receiver() -> tuple[str, ...]:
     return tuple([x.device for x in gnss_receiver_port_list])
 
 
+def get_test_position() -> Position:
+    return Position(
+        latitude_degrees=48.6467596667,
+        longitude_degrees=16.791555,
+        altitude_meters=215.3,
+    )
+
+
 def get_default_ublox_gnss_receiver_baudrate() -> int:
     return 9600
 
@@ -198,7 +206,9 @@ def get_fixed_mode_for_ublox_gnss_receiver(
     position: Position,
     accuracy_limit_millimeters: int = get_default_accuracy_limit_millimeters(),
 ) -> pyubx2.UBXMessage:
-    altitude_centimeters = round(position.altitude_meters * 100)
+    altitude_first_part, altitude_second_part = pyubx2.val2sphp(
+        position.altitude_meters, 1e-2
+    )
     latitude_first_part, latitude_second_part = pyubx2.val2sphp(
         position.latitude_degrees
     )
@@ -209,8 +219,8 @@ def get_fixed_mode_for_ublox_gnss_receiver(
         ("CFG_TMODE_MODE", 2),
         ("CFG_TMODE_POS_TYPE", 1),
         ("CFG_TMODE_FIXED_POS_ACC", accuracy_limit_millimeters * 10),
-        ("CFG_TMODE_HEIGHT_HP", 0),
-        ("CFG_TMODE_HEIGHT", altitude_centimeters),
+        ("CFG_TMODE_HEIGHT", altitude_first_part),
+        ("CFG_TMODE_HEIGHT_HP", altitude_second_part),
         ("CFG_TMODE_LAT", latitude_first_part),
         ("CFG_TMODE_LAT_HP", latitude_second_part),
         ("CFG_TMODE_LON", longitude_first_part),
