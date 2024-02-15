@@ -9,7 +9,7 @@ readme = "README.md"
 python = "^3.12"
 
 [tool.poetry.scripts]
-main = "blockchain_fee_logger.main:main"
+main = "ubx_rtk_base.main:main"
 
 [tool.poetry.group.dev.dependencies]
 black = "^24.2.0"
