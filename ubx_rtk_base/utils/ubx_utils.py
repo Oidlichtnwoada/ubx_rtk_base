@@ -15,21 +15,22 @@ def is_ublox_gnss_receiver(port_info: ListPortInfo) -> bool:
     ublox_gnss_receiver_manufacturer = "u-blox AG - www.u-blox.com"
     ublox_gnss_receiver_product = "u-blox GNSS receiver"
     ublox_gnss_receiver_description = ublox_gnss_receiver_product
+    manufacturer: str | None = port_info.manufacturer
+    product: str | None = port_info.product
+    description: str | None = port_info.description
+    if manufacturer is None or product is None or description is None:
+        raise RuntimeError
     return (
-        port_info.manufacturer == ublox_gnss_receiver_manufacturer
-        and port_info.product == ublox_gnss_receiver_product
-        and port_info.description == ublox_gnss_receiver_description
+        manufacturer == ublox_gnss_receiver_manufacturer
+        and product == ublox_gnss_receiver_product
+        and description == ublox_gnss_receiver_description
     )
 
 
-def get_port_of_ublox_gnss_receiver() -> str | None:
+def get_ports_of_ublox_gnss_receiver() -> tuple[str, ...]:
     port_list = comports(include_links=True)
     gnss_receiver_port_list = filter(is_ublox_gnss_receiver, port_list)
-    eventual_gnss_receiver = next(iter(gnss_receiver_port_list), None)
-    if eventual_gnss_receiver is None:
-        return None
-    else:
-        return eventual_gnss_receiver.device
+    return tuple([x.device for x in gnss_receiver_port_list])
 
 
 def get_default_ublox_gnss_receiver_baudrate() -> int:
@@ -45,31 +46,31 @@ def get_default_ublox_gnss_receiver_port_type() -> str:
 
 
 def get_ublox_gnss_receiver_serial() -> Serial:
-    ublox_gnss_receiver_port = get_port_of_ublox_gnss_receiver()
-    if ublox_gnss_receiver_port is None:
+    ublox_gnss_receiver_ports = get_ports_of_ublox_gnss_receiver()
+    if len(ublox_gnss_receiver_ports) == 0:
         raise RuntimeError
     return Serial(
-        port=ublox_gnss_receiver_port,
+        port=ublox_gnss_receiver_ports[0],
         baudrate=get_default_ublox_gnss_receiver_baudrate(),
         timeout=get_default_ublox_gnss_receiver_timeout(),
     )
 
 
 def is_ack_message_correct(ack_message: UBXMessage, sent_message: UBXMessage) -> bool:
-    sent_message_identity = sent_message.identity
+    sent_message_identity: str = sent_message.identity
     ack_message_string = str(ack_message)
     match = re.search("msgID=([A-Z]{3}-[A-Z]{3})", ack_message_string)
     if match is None:
         raise RuntimeError
     try:
-        ack_message_identity = match.group(1)
+        ack_message_identity = str(match.group(1))
         return sent_message_identity == ack_message_identity
     except IndexError:
         raise RuntimeError
 
 
 def send_message_to_ublox_gnss_receiver(
-    serial: Serial, message: UBXMessage, ack_queue: queue.Queue
+    serial: Serial, message: UBXMessage, ack_queue: queue.Queue[UBXMessage]
 ) -> None:
     serial.write(message.serialize())
     ack_message = ack_queue.get()
@@ -92,8 +93,8 @@ def is_message_ublox_acknowledge(message: UBXMessage | NMEAMessage) -> bool:
 
 def read_messages_from_ublox_gnss_receiver(
     serial: Serial,
-    running_queue: queue.Queue,
-    ack_queue: queue.Queue,
+    running_queue: queue.Queue[bool],
+    ack_queue: queue.Queue[UBXMessage],
     callback: Callable[
         [UBXMessage | NMEAMessage], None
     ] = get_default_message_callback_for_ublox_gnss_receiver,
@@ -154,8 +155,8 @@ class UbloxGnssReceiver:
     ) -> None:
         self.serial = get_ublox_gnss_receiver_serial()
         self.callback = callback
-        self.ack_queue = queue.Queue()
-        self.running_queue = queue.Queue()
+        self.ack_queue: queue.Queue[UBXMessage] = queue.Queue()
+        self.running_queue: queue.Queue[bool] = queue.Queue()
         self.read_messages_thread = Thread(target=self.read_messages)
 
     def start(self) -> None:
