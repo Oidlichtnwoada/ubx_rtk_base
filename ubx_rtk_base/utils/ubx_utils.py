@@ -68,7 +68,7 @@ def get_default_ublox_gnss_receiver_port_type() -> str:
 
 
 def get_default_accuracy_limit_millimeters() -> int:
-    return 5000
+    return 50000
 
 
 def get_default_survey_in_min_duration_seconds() -> int:
