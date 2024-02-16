@@ -18,7 +18,7 @@ from ubx_rtk_base.utils.math_utils import value_to_precision_integers
 from ubx_rtk_base.utils.string_utils import get_default_string_value
 
 Message = typing.Union[pyubx2.UBXMessage, pynmeagps.NMEAMessage, pyrtcm.RTCMMessage]
-MessageCallback = typing.Callable[[Message], None]
+MessageCallback = typing.Callable[[bytes, Message], None]
 
 
 @dataclasses.dataclass(frozen=True, order=True, kw_only=True)
@@ -117,10 +117,12 @@ def send_message_to_ublox_gnss_receiver(
 
 
 def get_default_message_callback_for_ublox_gnss_receiver(
+    data: bytes,
     message: Message,
 ) -> None:
     print(
-        f"following message received on {datetime.datetime.now(tz=datetime.UTC)}: {str(message)}"
+        f"following message received on {datetime.datetime.now(tz=datetime.UTC)}: {str(message)} "
+        f"(bytes representation: {data!r})"
     )
 
 
@@ -146,12 +148,12 @@ def read_messages_from_ublox_gnss_receiver(
     )
     while not running_queue.empty():
         if serial_port.in_waiting:
-            _, parsed_data = ublox_reader.read()
+            bytes_data, parsed_data = ublox_reader.read()
             if parsed_data:
                 if is_message_ublox_acknowledge(parsed_data):
                     ack_queue.put(parsed_data)
                 else:
-                    callback(parsed_data)
+                    callback(bytes_data, parsed_data)
 
 
 def get_factory_reset_message_for_ublox_gnss_receiver() -> pyubx2.UBXMessage:
