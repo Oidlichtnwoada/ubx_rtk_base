@@ -3,6 +3,7 @@ import datetime
 import io
 import queue
 import re
+import subprocess
 import threading
 import time
 import typing
@@ -15,6 +16,7 @@ import serial.tools.list_ports
 import serial.tools.list_ports_common
 
 from ubx_rtk_base.utils.math_utils import value_to_precision_integers
+from ubx_rtk_base.utils.ntrip_utils import get_publishing_rtcm_messages_process
 from ubx_rtk_base.utils.string_utils import get_default_string_value
 from ubx_rtk_base.utils.tcp_utils import get_rtcm3_tcp_server_thread
 
@@ -250,7 +252,11 @@ def get_fixed_mode_for_ublox_gnss_receiver(
 class UbloxGnssReceiver:
     def __init__(
         self,
+        ntrips_mountpoint: str,
+        ntrips_password: str,
     ) -> None:
+        self.ntrips_mountpoint = ntrips_mountpoint
+        self.ntrips_password = ntrips_password
         self.serial = get_ublox_gnss_receiver_serial()
         self.callback = self.push_rtcm3_messages_to_tcp_server
         self.ack_queue: queue.Queue[pyubx2.UBXMessage] = queue.Queue()
@@ -260,16 +266,23 @@ class UbloxGnssReceiver:
         self.rtcm3_tcp_server_thread = get_rtcm3_tcp_server_thread(
             self.rtcm3_bytes_queue, self.running_queue
         )
+        self.publishing_rtcm_messages_process: subprocess.Popen[bytes] | None = None
 
     def start(self) -> None:
         self.running_queue.put(True)
         self.read_messages_thread.start()
         self.rtcm3_tcp_server_thread.start()
+        self.publishing_rtcm_messages_process = get_publishing_rtcm_messages_process(
+            ntrips_mountpoint=self.ntrips_mountpoint,
+            ntrips_password=self.ntrips_password,
+        )
 
     def stop(self) -> None:
         self.running_queue.get()
         self.read_messages_thread.join()
         self.rtcm3_tcp_server_thread.join()
+        if self.publishing_rtcm_messages_process is not None:
+            self.publishing_rtcm_messages_process.terminate()
 
     def do_factory_reset(self) -> None:
         self.send_message(get_factory_reset_message_for_ublox_gnss_receiver())
