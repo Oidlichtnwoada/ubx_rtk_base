@@ -1,4 +1,5 @@
 import dataclasses
+import datetime
 import io
 import queue
 import re
@@ -7,6 +8,7 @@ import time
 import typing
 
 import pynmeagps
+import pyrtcm
 import pyubx2
 import serial
 import serial.tools.list_ports
@@ -14,6 +16,9 @@ import serial.tools.list_ports_common
 
 from ubx_rtk_base.utils.math_utils import value_to_precision_integers
 from ubx_rtk_base.utils.string_utils import get_default_string_value
+
+Message = typing.Union[pyubx2.UBXMessage, pynmeagps.NMEAMessage, pyrtcm.RTCMMessage]
+MessageCallback = typing.Callable[[Message], None]
 
 
 @dataclasses.dataclass(frozen=True, order=True, kw_only=True)
@@ -112,13 +117,15 @@ def send_message_to_ublox_gnss_receiver(
 
 
 def get_default_message_callback_for_ublox_gnss_receiver(
-    message: pyubx2.UBXMessage | pynmeagps.NMEAMessage,
+    message: Message,
 ) -> None:
-    print(message)
+    print(
+        f"following message received on {datetime.datetime.now(tz=datetime.UTC)}: {str(message)}"
+    )
 
 
 def is_message_ublox_acknowledge(
-    message: pyubx2.UBXMessage | pynmeagps.NMEAMessage,
+    message: Message,
 ) -> bool:
     if isinstance(message, pyubx2.UBXMessage):
         return message.identity in ("ACK-ACK", "ACK-NAK")
@@ -130,11 +137,13 @@ def read_messages_from_ublox_gnss_receiver(
     serial_port: serial.Serial,
     running_queue: queue.Queue[bool],
     ack_queue: queue.Queue[pyubx2.UBXMessage],
-    callback: typing.Callable[
-        [pyubx2.UBXMessage | pynmeagps.NMEAMessage], None
-    ] = get_default_message_callback_for_ublox_gnss_receiver,
+    callback: MessageCallback = get_default_message_callback_for_ublox_gnss_receiver,
 ) -> None:
-    ublox_reader = pyubx2.UBXReader(io.BufferedReader(serial_port))
+    ublox_reader = pyubx2.UBXReader(
+        io.BufferedReader(serial_port),
+        protfilter=pyubx2.UBX_PROTOCOL | pyubx2.NMEA_PROTOCOL | pyubx2.RTCM3_PROTOCOL,
+        quitonerror=pyubx2.ERR_RAISE,
+    )
     while not running_queue.empty():
         if serial_port.in_waiting:
             _, parsed_data = ublox_reader.read()
@@ -240,9 +249,7 @@ def get_fixed_mode_for_ublox_gnss_receiver(
 class UbloxGnssReceiver:
     def __init__(
         self,
-        callback: typing.Callable[
-            [pyubx2.UBXMessage | pynmeagps.NMEAMessage], None
-        ] = get_default_message_callback_for_ublox_gnss_receiver,
+        callback: MessageCallback = get_default_message_callback_for_ublox_gnss_receiver,
     ) -> None:
         self.serial = get_ublox_gnss_receiver_serial()
         self.callback = callback
