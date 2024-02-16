@@ -16,6 +16,7 @@ import serial.tools.list_ports_common
 
 from ubx_rtk_base.utils.math_utils import value_to_precision_integers
 from ubx_rtk_base.utils.string_utils import get_default_string_value
+from ubx_rtk_base.utils.tcp_utils import get_rtcm3_tcp_server_thread
 
 Message = typing.Union[pyubx2.UBXMessage, pynmeagps.NMEAMessage, pyrtcm.RTCMMessage]
 MessageCallback = typing.Callable[[bytes, Message], None]
@@ -153,7 +154,7 @@ def read_messages_from_ublox_gnss_receiver(
                 if is_message_ublox_acknowledge(parsed_data):
                     ack_queue.put(parsed_data)
                 else:
-                    callback(bytes_data, parsed_data)
+                    callback(bytes_data.strip(), parsed_data)
 
 
 def get_factory_reset_message_for_ublox_gnss_receiver() -> pyubx2.UBXMessage:
@@ -249,21 +250,26 @@ def get_fixed_mode_for_ublox_gnss_receiver(
 class UbloxGnssReceiver:
     def __init__(
         self,
-        callback: MessageCallback = get_default_message_callback_for_ublox_gnss_receiver,
     ) -> None:
         self.serial = get_ublox_gnss_receiver_serial()
-        self.callback = callback
+        self.callback = self.push_rtcm3_messages_to_tcp_server
         self.ack_queue: queue.Queue[pyubx2.UBXMessage] = queue.Queue()
         self.running_queue: queue.Queue[bool] = queue.Queue()
+        self.rtcm3_bytes_queue: queue.Queue[bytes] = queue.Queue()
         self.read_messages_thread = threading.Thread(target=self.read_messages)
+        self.rtcm3_tcp_server_thread = get_rtcm3_tcp_server_thread(
+            self.rtcm3_bytes_queue, self.running_queue
+        )
 
     def start(self) -> None:
         self.running_queue.put(True)
         self.read_messages_thread.start()
+        self.rtcm3_tcp_server_thread.start()
 
     def stop(self) -> None:
         self.running_queue.get()
         self.read_messages_thread.join()
+        self.rtcm3_tcp_server_thread.join()
 
     def do_factory_reset(self) -> None:
         self.send_message(get_factory_reset_message_for_ublox_gnss_receiver())
@@ -284,6 +290,14 @@ class UbloxGnssReceiver:
 
     def send_message(self, message: pyubx2.UBXMessage) -> None:
         send_message_to_ublox_gnss_receiver(self.serial, message, self.ack_queue)
+
+    def push_rtcm3_messages_to_tcp_server(
+        self,
+        data: bytes,
+        message: Message,
+    ) -> None:
+        if isinstance(message, pyrtcm.RTCMMessage):
+            self.rtcm3_bytes_queue.put(data)
 
     def wait_until_terminated(self) -> None:
         while not self.running_queue.empty():
