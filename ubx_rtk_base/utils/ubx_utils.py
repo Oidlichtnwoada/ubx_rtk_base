@@ -188,8 +188,6 @@ def get_rtcm3_base_station_outputs_for_ublox_gnss_receiver() -> pyubx2.UBXMessag
         "1097",
         "1127",
         "1230",
-        "4072_0",
-        "4072_1",
     ):
         cfg_data += (
             (
