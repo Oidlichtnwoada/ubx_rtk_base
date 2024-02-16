@@ -10,6 +10,7 @@ python = "^3.12"
 pyserial = "^3.5"
 pyubx2 = "^1.2.38"
 pynmeagps = "^1.0.33"
+pyrtcm = "^1.0.15"
 
 [tool.poetry.scripts]
 main = "ubx_rtk_base.main:main"
